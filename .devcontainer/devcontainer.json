@@ -1,0 +1,20 @@
+{
+      "name": "CloudVision Studio Tools",
+      "image": "mcr.microsoft.com/devcontainers/python:3.12",
+
+      "containerEnv": {
+          "ANTHROPIC_BASE_URL": "https://ai-proxy.infra.corp.arista.io/",
+          "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+          "CLAUDE_CODE_USE_VERTEX": "0"
+      },
+
+      "postCreateCommand": "curl -fsSL 'https://gerrit.corp.arista.io/plugins/gitiles/ai/ai-tools/+/refs/heads/stable/install.sh?format=TEXT' | base64 -d | bash && pip install 'cloudvision>=1.29.1' pyyaml",
+
+      "customizations": {
+          "vscode": {
+              "extensions": [
+                  "ms-python.python"
+              ]
+          }
+      }
+  }
