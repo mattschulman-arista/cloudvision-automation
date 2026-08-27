@@ -1,5 +1,5 @@
 *.tok
-mac_lookup.sh
+*.sh
 macs.txt
 output.csv
 __pycache__/
