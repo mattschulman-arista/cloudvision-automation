@@ -50,15 +50,48 @@ ICS profiles are mapped to DICS port profiles with the following field conversio
 |---|---|---|
 | `name` | `name` | Profile name (used as the collection key) |
 | `profileDescription` | `description` | |
-| `mode` | `mode` | `access` or `trunk` |
-| `speed` | `speed` | |
+| `mode` | `mode` | See Mode Mapping below |
+| `speed` | `speed` | ICS dropdown values translated to EOS CLI format (e.g. `1gfull` → `1g`) |
 | `accessVlanId` | `vlans.vlans` | Converted to string; used when `allowedVlans` is not set |
 | `allowedVlans` | `vlans.vlans` | Trunk allowed VLANs |
 | `nativeVlanId` | `vlans.nativeVlan` | |
 | `phoneVlanId` | `vlans.phoneVlan` | |
 | `portFastEnabled` | `spanningTree.portfast` | `True` or `None` (default) maps to `"edge"`; only explicit `False` disables |
 | `ipmtu` | `mtu` | |
-| `mlagEnabled` | `portChannel.mlag` | Converted to `"Yes"` / `"No"` |
+| `mlagEnabled` | `portChannel.mlag` | `"Yes"` / `"No"` |
+| `lacpEnabled` | `portChannel.portChannelMode` | `true` → `"active"`, `false` → `"on"` |
+| `channelGroup` | Port channel enabled | Triggers `portChannel` and `portChannelEnabled` set to `"Yes"` |
+
+### Mode Mapping
+
+| ICS Mode | DICS Mode | Additional Handling |
+|---|---|---|
+| `access` | `access` | |
+| `trunk` | `trunk` | VLANs section: `vlans` (allowed) + `nativeVlan` |
+| `phone` | `trunk phone` | Phone section: `trunk` set to `"tagged"`. VLANs section: `nativeVlan` + `phoneVlan` |
+| `routed` | *(none)* | No DICS mode set. EOS CLI field populated with `no switchport` and `ip address <ip/cidr>` from the ICS profile |
+
+### Speed Mapping
+
+The ICS uses dropdown shorthand values; the DICS feeds values directly into the EOS `speed` command:
+
+| ICS Value | DICS Value |
+|---|---|
+| `auto` | `auto` |
+| `1gfull` | `1g` |
+| `10gfull` | `10g` |
+| `25gfull` | `25g` |
+| `100full` | `100mfull` |
+| `100half` | `100mhalf` |
+
+### Port Channel
+
+When the ICS profile has a channel group, MLAG, or LACP enabled:
+- `portChannel` is set to `"Yes"` (makes the section visible in the studio)
+- `portChannelEnabled` is set to `"Yes"`
+- `portChannelMode` is set to `"active"` (LACP enabled) or `"on"` (no LACP)
+- `mlag` is set to `"Yes"` / `"No"`
+- LACP fallback mode and timeout are mapped if configured
 
 ### Interface Assignments
 

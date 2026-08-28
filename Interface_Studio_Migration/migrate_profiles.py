@@ -128,11 +128,48 @@ FIELD_TYPE_NAMES = {t: t.name for t in InputFieldType}
 #   portProfilePortChannelMlag  ->  mlag   (inside the "portChannel" group)
 
 # ICS profile field -> DICS port profile field (direct 1:1 mappings).
+# The "mode" and "speed" fields are handled separately because they
+# require value translation (ICS dropdown options -> DICS/EOS values).
 PROFILE_FIELD_MAP = {
     "name": "name",
     "profileDescription": "description",
-    "speed": "speed",
-    "mode": "mode",
+}
+
+# ICS switchport mode -> DICS mode.  The DICS uses "trunk phone" instead
+# of "phone", and "routed" has no DICS equivalent (handled via eosCli).
+ICS_MODE_MAP = {
+    "access": "access",
+    "trunk": "trunk",
+    "phone": "trunk phone",
+    "dot1q-tunnel": "dot1q-tunnel",
+}
+
+# ICS speed dropdown values -> EOS CLI "speed <value>" arguments.
+# The ICS uses its own shorthand (e.g. "1gfull", "10gfull"), while the
+# DICS feeds the value directly into the EOS "speed" command which uses
+# a different shorthand (e.g. "1g", "10g", "100mfull").
+ICS_SPEED_MAP = {
+    "auto": "auto",
+    "10half": "10mhalf",
+    "10full": "10mfull",
+    "100half": "100mhalf",
+    "100full": "100mfull",
+    "1000full": "1g",
+    "1gfull": "1g",
+    "2500full": "2.5g",
+    "2.5gfull": "2.5g",
+    "5000full": "5g",
+    "5gfull": "5g",
+    "10000full": "10g",
+    "10gfull": "10g",
+    "25000full": "25g",
+    "25gfull": "25g",
+    "40000full": "40g-4",
+    "40gfull": "40g-4",
+    "50000full": "50g-1",
+    "50gfull": "50g-1",
+    "100000full": "100g-4",
+    "100gfull": "100g-4",
 }
 
 # ICS VLAN fields -> DICS "vlans" sub-group members.
@@ -237,11 +274,57 @@ def map_profile_to_dics(ics_profile):
     """
     dics = {}
 
-    # Simple 1:1 field copies (name, description, speed, mode).
+    # Simple 1:1 field copies (name, description, speed).
     for ics_key, dics_key in PROFILE_FIELD_MAP.items():
         val = ics_profile.get(ics_key)
         if val is not None:
             dics[dics_key] = val
+
+    # Switchport mode — the ICS supports "routed" and "phone" modes that
+    # are not valid DICS port profile options.  "phone" is mapped to
+    # "access" (phone VLAN is handled via the vlans group).  "routed"
+    # has no DICS equivalent mode, so we use the EOS CLI field to inject
+    # "no switchport" and the IP address configuration directly.
+    ics_mode = ics_profile.get("mode")
+    if ics_mode:
+        dics_mode = ICS_MODE_MAP.get(ics_mode)
+        if dics_mode:
+            dics["mode"] = dics_mode
+        elif ics_mode == "routed":
+            # Routed ports need "no switchport" and optionally an IP address.
+            # Since there's no DICS mode for this, we put raw EOS commands
+            # into the eosCli field which the DICS appends to the interface.
+            eos_lines = ["no switchport"]
+            ip_addr = ics_profile.get("ipaddress")
+            if ip_addr:
+                eos_lines.append(f"ip address {ip_addr}")
+            dics["eosCli"] = "\n".join(eos_lines)
+            debug(f"Routed profile '{ics_profile.get('name')}': "
+                  f"eosCli={dics['eosCli']!r}")
+        else:
+            profile_name = ics_profile.get("name", "?")
+            print(f"  WARNING: profile '{profile_name}' has unsupported "
+                  f"mode '{ics_mode}' — skipping mode field")
+
+    # Phone trunk — when the ICS mode is "phone", the DICS "trunk phone"
+    # mode also needs the phone section's trunk field set to "tagged" to
+    # indicate the phone VLAN is carried as a tagged VLAN on the port.
+    if ics_mode == "phone":
+        dics["phone"] = {"trunk": "tagged"}
+
+    # Interface speed — the ICS uses dropdown shorthand values like "1gfull"
+    # which need to be translated to EOS CLI format ("1000full") for the DICS.
+    ics_speed = ics_profile.get("speed")
+    if ics_speed:
+        dics_speed = ICS_SPEED_MAP.get(ics_speed)
+        if dics_speed:
+            dics["speed"] = dics_speed
+        else:
+            # Pass through unrecognized values as-is; the DICS build will
+            # validate them against EOS.
+            dics["speed"] = ics_speed
+            debug(f"Speed '{ics_speed}' not in mapping table, "
+                  f"passing through as-is")
 
     # VLANs group — the DICS nests VLAN settings under a "vlans" dict.
     # The ICS "accessVlanId" maps to "vlans.vlans" (as a string) when in
@@ -270,14 +353,37 @@ def map_profile_to_dics(ics_profile):
     if mtu is not None:
         dics["mtu"] = mtu
 
-    # Port channel / MLAG — the DICS port profile port channel group uses
-    # short field names stripped of the parent group prefix.  Boolean-like
-    # options use "Yes"/"No" values.
+    # Port channel / MLAG — the DICS port channel group requires "enabled"
+    # to be "Yes" before other settings take effect.  The DICS has a "mode"
+    # field (active/on/passive) for LACP negotiation mode.
+    has_port_channel = False
     pc = {}
+
+    ch_group = (ics_profile.get("channelGroup")
+                or ics_profile.get("profileChannelGroup"))
     mlag = (ics_profile.get("mlagEnabled")
             or ics_profile.get("profileMlagEnabled"))
-    if mlag is not None:
+    lacp_enabled = (ics_profile.get("lacpEnabled")
+                    or ics_profile.get("profileLACPEnabled"))
+
+    # If any port channel setting is present, enable the port channel.
+    # The DICS has two enable toggles: "portChannel" (makes the section
+    # visible in the studio) and "portChannelEnabled" (enables the config).
+    if ch_group is not None or mlag or lacp_enabled:
+        has_port_channel = True
+        pc["portChannel"] = "Yes"
+        pc["portChannelEnabled"] = "Yes"
+
+    if mlag:
         pc["mlag"] = "Yes" if mlag else "No"
+
+    # LACP negotiation mode — "active" when LACP is enabled, "on" otherwise.
+    if lacp_enabled:
+        pc["portChannelMode"] = "active"
+    elif ch_group is not None:
+        pc["portChannelMode"] = "on"
+
+    # LACP fallback settings (if configured in the ICS profile).
     lacp_config = ics_profile.get("profileLACPConfiguration")
     if isinstance(lacp_config, dict):
         fb = {}
@@ -289,8 +395,10 @@ def map_profile_to_dics(ics_profile):
             fb["timeout"] = fb_timeout
         if fb:
             pc["lacpFallback"] = fb
-    if pc:
+
+    if has_port_channel:
         dics["portChannel"] = pc
+        debug(f"Port channel for '{ics_profile.get('name')}': {pc}")
 
     return dics
 
@@ -1021,7 +1129,16 @@ async def main():
             mapped = next((p for p in new_port_profiles
                            if p.get("name") == pp_name), {})
             st = mapped.get("spanningTree", {})
+            pc = mapped.get("portChannel", {})
             debug(f"{pp_name}: portFastEnabled={pf!r} -> spanningTree={st}")
+            if pc:
+                debug(f"  portChannel={pc}")
+            # Show raw ICS port channel fields for debugging
+            for k in ("channelGroup", "mlagEnabled", "lacpEnabled",
+                      "profileLACPConfiguration"):
+                v = ics_prof.get(k)
+                if v is not None:
+                    debug(f"  ICS {k}={v!r}")
 
         # --- Apply interface assignments ---
         placed = set()
