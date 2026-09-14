@@ -658,20 +658,36 @@ def detach_ics_assignments(ics_data, placed):
     return removed
 
 
+def cleanup_ics_profiles(ics_data):
+    """Remove all interface profile definitions from the ICS input data.
+
+    The profile definitions are migrated to the DICS collection before this
+    function is called. Interface assignments are handled separately by
+    :func:`detach_ics_assignments`.
+
+    Returns the number of profile definitions removed.
+    """
+    profiles = ics_data.get("profiles", [])
+    removed = len(profiles) if isinstance(profiles, list) else 0
+    ics_data["profiles"] = []
+    return removed
+
+
 # ---------------------------------------------------------------------------
 # CloudVision API helpers
 # ---------------------------------------------------------------------------
 
-async def find_studio_ids(channel):
+async def find_studio_ids(channel, ics_id=None, dics_id=None):
     """List all studios and return the IDs for the ICS and DICS.
 
     Studios are discovered by matching their display_name against the
     known constants.  The studio IDs are server-side values (e.g.
     "studio-interface-manager") and are not shipped in the SDK.
     """
+    if ics_id and dics_id:
+        return ics_id, dics_id
+
     service = StudioSummaryServiceStub(channel)
-    ics_id = None
-    dics_id = None
     async for item in service.get_all(StudioSummaryStreamRequest()):
         summary = item.value
         name = summary.display_name
@@ -679,6 +695,8 @@ async def find_studio_ids(channel):
             ics_id = summary.key.studio_id
         elif name == DICS_DISPLAY_NAME:
             dics_id = summary.key.studio_id
+        if ics_id and dics_id:
+            break
     return ics_id, dics_id
 
 
@@ -1016,6 +1034,14 @@ async def main():
         help="Path to service account token file",
     )
     parser.add_argument(
+        "--ics-id",
+        help="Known ICS studio ID; skips its discovery",
+    )
+    parser.add_argument(
+        "--dics-id",
+        help="Known DICS studio ID; skips its discovery",
+    )
+    parser.add_argument(
         "--mode",
         choices=["discover", "workspace-only", "submit-workspace",
                  "submit-all"],
@@ -1040,6 +1066,10 @@ async def main():
         "--debug", action="store_true",
         help="Enable verbose debug output",
     )
+    parser.add_argument(
+        "--cleanup-ics", action="store_true",
+        help="Remove all interface profiles from the ICS in the workspace",
+    )
     args = parser.parse_args()
 
     # Set the module-level debug flag so all functions can use it.
@@ -1056,9 +1086,14 @@ async def main():
     client = AsyncCVClient.from_token(token, host, port=port,
                                       insecure=args.insecure)
     with client as channel:
-        # --- Discover studio IDs by display name ---
-        print("Discovering studios...")
-        ics_id, dics_id = await find_studio_ids(channel)
+        # --- Discover studio IDs by display name (unless supplied) ---
+        if args.ics_id and args.dics_id:
+            print("Using supplied studio IDs")
+        else:
+            print("Discovering studios...")
+        ics_id, dics_id = await find_studio_ids(
+            channel, args.ics_id, args.dics_id
+        )
         if not ics_id:
             print(f"Error: could not find studio "
                   f"'{ICS_DISPLAY_NAME}'", file=sys.stderr)
@@ -1069,6 +1104,8 @@ async def main():
             sys.exit(1)
         print(f"  ICS: {ics_id}")
         print(f"  DICS: {dics_id}")
+        print("  Reuse with: "
+              f"--ics-id {ics_id} --dics-id {dics_id}")
 
         # In discover mode, print schemas and exit without making changes.
         if args.mode == "discover":
@@ -1172,6 +1209,12 @@ async def main():
             detached = detach_ics_assignments(ics_data, placed)
             print(f"  Detaching {detached} migrated assignment(s) from ICS")
 
+        # Profile definitions remain in the ICS by default. When explicitly
+        # requested, remove them in the same workspace as the DICS changes.
+        if args.cleanup_ics:
+            cleaned = cleanup_ics_profiles(ics_data)
+            print(f"  Removing {cleaned} interface profile(s) from ICS")
+
         # --- Read ICS assigned tags query ---
         tags_query = await read_assigned_tags(channel, ics_id)
 
@@ -1189,8 +1232,8 @@ async def main():
             print(f"  Wrote DICS assigned tags query: {tags_query}")
 
         # Write the modified ICS data (detached interface assignments).
-        if assignments and placed:
-            print("Writing ICS data to workspace (detaching profiles)...")
+        if (assignments and placed) or args.cleanup_ics:
+            print("Writing ICS data to workspace...")
             await write_studio_root(channel, ics_id, ws_id, ics_data)
             print("  Wrote ICS root input")
 

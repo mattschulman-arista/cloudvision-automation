@@ -30,6 +30,9 @@ python3 migrate_profiles.py \
 | `--workspace-name` | `ICS to DICS Profile Migration` | Display name for the workspace created in CVaaS |
 | `--insecure` | off | Skip TLS certificate verification |
 | `--debug` | off | Enable verbose debug output |
+| `--cleanup-ics` | off | Remove all interface profile definitions from the ICS in the migration workspace |
+| `--ics-id` | auto-discovered | Known ICS studio ID; skips studio discovery for ICS |
+| `--dics-id` | auto-discovered | Known DICS studio ID; skips studio discovery for DICS |
 
 ### Modes
 
@@ -107,6 +110,8 @@ The script reads device tags (DC, DC-Pod, Leaf-Domain) from CloudVision to deter
 
 After successfully placing an assignment in the DICS, the corresponding interface entry is removed from the ICS data within the same workspace. This prevents the profile from being active in both studios simultaneously.
 
+Use `--cleanup-ics` to also remove all ICS interface profile definitions in the migration workspace. The option is off by default so the source profile definitions remain available for review.
+
 ## Prerequisites
 
 - Python 3.12+
@@ -120,6 +125,12 @@ Inspect the studio schemas before migrating:
 
 ```bash
 python3 migrate_profiles.py --server mycloud.arista.io:443 --token-file token.tok --mode discover
+```
+
+For repeated runs, provide the known studio IDs to skip studio discovery:
+
+```bash
+python3 migrate_profiles.py --server mycloud.arista.io:443 --token-file token.tok --ics-id <ics-studio-id> --dics-id <dics-studio-id>
 ```
 
 Run the migration and review in CVaaS before committing:
