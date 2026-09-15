@@ -16,6 +16,10 @@ device,mgmtVRF,enabled,ipv4Address,defaultGateway,additionalInterfaces
 
 `additionalInterfaces` may be empty, a comma-separated list of interface names, or a JSON list of objects such as `[{"interfaceName":"Management1\/1","ipv4Address":"192.0.2.10\/24"}]`. Each CSV row is written as a device-tagged resolver entry using the nested Management Connectivity schema.
 
+## CloudVision server
+
+The required `--server` option accepts a hostname or IP address, with an optional port. If no port is provided, port `443` is used. Supported forms include `hostname`, `hostname:port`, `192.0.2.50`, and `192.0.2.50:8443`.
+
 ## --mode options
 
 `workspace-only` - Dry run (Leaves workspace open):
@@ -41,6 +45,21 @@ Use `--workspace-name "<string>"` to set the CloudVision workspace display name.
 python3 manage_static_mgmt_ip.py --server cloudvision.example.com \
   --token-file service-account.tok --input-file devices.csv \
   --mode workspace-only --workspace-name "Building 1 Management IPs"
+```
+
+## TLS certificate checking
+
+Use `--insecure` to disable TLS certificate verification when connecting to a
+CloudVision instance with a certificate that cannot be validated by the local
+system:
+
+```bash
+python3 manage_static_mgmt_ip.py \
+  --server cloudvision.example.com \
+  --token-file service-account.tok \
+  --input-file devices.csv \
+  --mode workspace-only \
+  --insecure
 ```
 
 Install the SDK with `pip install 'cloudvision>=1.29.1'`.

@@ -1,7 +1,8 @@
 *.tok
 *.sh
 macs.txt
-*.csv
+output.csv
+test.csv
 __pycache__/
 .claude/
 claude_session

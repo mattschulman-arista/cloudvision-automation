@@ -1,0 +1,2 @@
+device,mgmtVRF,enabled,ipv4Address,defaultGateway,additionalInterfaces
+<hostname>,MGMT,yes,<ip>/<cidr>,<gw_ip>,
