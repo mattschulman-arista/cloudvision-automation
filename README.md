@@ -8,6 +8,7 @@ A collection of Python tools for automating tasks with Arista CloudVision using 
 |---|---|
 | [MAC_Lookup](MAC_Lookup/) | Look up MAC address locations across your network. Given a list of MAC addresses, queries the CloudVision Endpoint Location API and returns the switch hostname, interface, and VLAN where each MAC was learned. Outputs results as an ASCII table or CSV. |
 | [Interface_Studio_Migration](Interface_Studio_Migration/) | Migrate interface profiles and port assignments from the Interface Configuration Studio (ICS) to the Data Center Interface Configuration Studio (DICS) in CVaaS. Maps profile fields between the two studio schemas, places interfaces in the correct DC/Pod/Domain hierarchy, and detaches migrated assignments from the ICS. |
+|[Static_Mgmt_IP_Automation](Static_Mgmt_IP_Automation/) | Read in a CSV file of device and static Mgmt IP address/GW and VRF info to populate the Static Addressing section of the Management Connectivity Studio.|
 
 ## Prerequisites
 
