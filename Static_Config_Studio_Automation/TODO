@@ -1,7 +1,0 @@
-- Create reconcile scripts for 710p 720p and try to the reconcile with device-filter ms-
-- Re-add more reconcile and see if it merges them
-- Create device that has reconcile but doesn't already have an attachment in SCS and migrate
-
-- Test out set functionality with INVENTORY dictionary
-- Test out set functionality with external file
-- Test out set functionality with output of get operation
