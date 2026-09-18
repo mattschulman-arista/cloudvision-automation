@@ -1,0 +1,18 @@
+---
+containers:
+  - name: "US/DC1"
+    configlets:
+      - name: "ntp_dc1"
+        body: "! Configlet apply to all devices under US/DC1\nntp server 8.8.8.8"
+
+devices:
+  - device_id: "JPE21231033"
+    container: "US/DC1"
+    configlets:
+      - name: "leaf1"
+        body: "! Configlet apply only to leaf1\nhostname leaf1"
+  - device_id: "JPE21231032"
+    container: "US/DC1"
+    configlets:
+      - name: "leaf2"
+        body: "! Configlet apply only to leaf2\nhostname leaf2"     

@@ -8,3 +8,8 @@ __pycache__/
 claude_session
 codex_session
 .history
+test_results
+session_info
+ms-demo-switch*
+all_configlets.txt
+.DS_Store

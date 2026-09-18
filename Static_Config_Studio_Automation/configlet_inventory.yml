@@ -1,0 +1,18 @@
+---
+containers:
+  - name: "US/DC1"
+    configlets:
+      - name: "ntp_dc1"
+        configlet_file: "configlets/ntp_dc1.cfg"
+
+devices:
+  - device_id: "JPE21231033"
+    container: "US/DC1"
+    configlets:
+      - name: "leaf1"
+        configlet_file: "configlets/leaf1.cfg"
+  - device_id: "JPE21231032"
+    container: "US/DC1"
+    configlets:
+      - name: "leaf2"
+        configlet_file: "configlets/leaf2.cfg"       
